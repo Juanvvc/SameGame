@@ -33,6 +33,7 @@ import org.anddev.andengine.ui.activity.BaseGameActivity;
 import org.anddev.andengine.util.HorizontalAlign;
 
 import android.graphics.Color;
+import android.view.Display;
 import android.view.KeyEvent;
 
 public class SamegameActivity extends BaseGameActivity implements IOnMenuItemClickListener {
@@ -48,10 +49,21 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 	/** Constant TAG useful for debugging. */
 	public static final String TAG = "SameGame";
 
-	/** Screen width. */
-	private static final int CAMERA_WIDTH = 1088;
-	/** Screen height. */
-	private static final int CAMERA_HEIGHT = 640;
+	/** If true, force large screens. */
+	private static boolean FORCE_LARGE_SCREEN = false;
+	/** If true, large screen detected. */
+	private boolean mLargeScreen;
+	/** The width of the screen. */
+	private int cameraWidth;
+	/** The height of the screen. */
+	private int cameraHeight;
+	/** He heigh in pixels of the text. */
+	private int fontSize;
+	/** Ball size in pixels. */
+	private static final int BALL_SIZE = 64;
+	/** Number of ball frames (for animations) */
+	private static final int BALL_FRAMES = 16;
+	
 	/** A reference to the camera. */
 	private Camera mCamera;
 
@@ -101,11 +113,29 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 	 */
 	@Override
 	public final Engine onLoadEngine() {
-		this.mCamera = new Camera(0, 0, CAMERA_WIDTH, CAMERA_HEIGHT);
+		// By default, small screen
+		cameraWidth = 800;
+		cameraHeight = 480;
+		fontSize = 24;
+		mLargeScreen = false;
+		
+		// check the screen size to detect larger screens
+		final Display display = getWindowManager().getDefaultDisplay();
+	    int displayWidth = display.getWidth();
+	    int displayHeight = display.getHeight();
+	    if (FORCE_LARGE_SCREEN || (displayHeight > 640 && displayWidth > 1088)) {
+	    	cameraWidth = 1088;
+	    	cameraHeight = 640;
+	    	fontSize = 32;
+	    	mLargeScreen = true;
+	    }
+	    // Big tables are only available on large screens
+		
+		this.mCamera = new Camera(0, 0, cameraWidth, cameraHeight);
 		return new Engine(
 				new EngineOptions(
 						true, ScreenOrientation.LANDSCAPE,
-						new RatioResolutionPolicy(CAMERA_WIDTH, CAMERA_HEIGHT),
+						new RatioResolutionPolicy(cameraWidth, cameraHeight),
 						this.mCamera));
 	}
 
@@ -122,28 +152,28 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		// Now, we create the texture from the rows of the image
 		// We know (because we created the image like this) that single frames
 		// in the atlas
-		// are 64x64 images, and there are 16 images in each row
+		// are BALL_SIZExBALL_SIZE images, and there are BALL_FRAMES images in each row
 		textures = new TiledTextureRegion[6];
-		textures[0] = new TiledTextureRegion(mBalls, 0, 64 * 0, 64 * 16, 64, 16, 1);
-		textures[1] = new TiledTextureRegion(mBalls, 0, 64 * 1, 64 * 16, 64, 16, 1);
-		textures[2] = new TiledTextureRegion(mBalls, 0, 64 * 2, 64 * 16, 64, 16, 1);
-		textures[3] = new TiledTextureRegion(mBalls, 0, 64 * 3, 64 * 16, 64, 16, 1);
-		textures[4] = new TiledTextureRegion(mBalls, 0, 64 * 4, 64 * 16, 64, 16, 1);
-		textures[5] = new TiledTextureRegion(mBalls, 0, 64 * 5, 64 * 16, 64, 16, 1);
+		textures[0] = new TiledTextureRegion(mBalls, 0, BALL_SIZE * 0, BALL_SIZE * BALL_FRAMES, BALL_SIZE, BALL_FRAMES, 1);
+		textures[1] = new TiledTextureRegion(mBalls, 0, BALL_SIZE * 1, BALL_SIZE * BALL_FRAMES, BALL_SIZE, BALL_FRAMES, 1);
+		textures[2] = new TiledTextureRegion(mBalls, 0, BALL_SIZE * 2, BALL_SIZE * BALL_FRAMES, BALL_SIZE, BALL_FRAMES, 1);
+		textures[3] = new TiledTextureRegion(mBalls, 0, BALL_SIZE * 3, BALL_SIZE * BALL_FRAMES, BALL_SIZE, BALL_FRAMES, 1);
+		textures[4] = new TiledTextureRegion(mBalls, 0, BALL_SIZE * 4, BALL_SIZE * BALL_FRAMES, BALL_SIZE, BALL_FRAMES, 1);
+		textures[5] = new TiledTextureRegion(mBalls, 0, BALL_SIZE * 5, BALL_SIZE * BALL_FRAMES, BALL_SIZE, BALL_FRAMES, 1);
 		// actually, there are some unused balls in that file. We are not using them
 		
 		// Finally, load the real textures
 		this.mEngine.getTextureManager().loadTexture(this.mBalls);
 		
-		this.mBackground = new RepeatingSpriteBackground(CAMERA_WIDTH, CAMERA_HEIGHT, this.mEngine.getTextureManager(), new AssetBitmapTextureAtlasSource(this, "back.png"));
+		this.mBackground = new RepeatingSpriteBackground(cameraWidth, cameraHeight, this.mEngine.getTextureManager(), new AssetBitmapTextureAtlasSource(this, "back.png"));
 
 		
 		// manage fonts
 		final BitmapTextureAtlas mFontTexture = new BitmapTextureAtlas(256, 256, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
 		FontFactory.setAssetBasePath("fonts/");
-		this.mFont = FontFactory.createFromAsset(mFontTexture, this, "Brivido.ttf", 36, true, Color.WHITE);
+		this.mFont = FontFactory.createFromAsset(mFontTexture, this, "Brivido.ttf", fontSize, true, Color.WHITE);
 		final BitmapTextureAtlas mFontTexture2 = new BitmapTextureAtlas(512, 512, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
-		this.mFont2 = FontFactory.createFromAsset(mFontTexture2, this, "Brivido.ttf", 72, true, Color.WHITE);
+		this.mFont2 = FontFactory.createFromAsset(mFontTexture2, this, "Brivido.ttf", fontSize * 2, true, Color.WHITE);
 		this.mEngine.getTextureManager().loadTexture(mFontTexture);
 		this.mEngine.getTextureManager().loadTexture(mFontTexture2);
 		this.getFontManager().loadFont(this.mFont);
@@ -187,12 +217,12 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		scene.setBackground(mBackground);
 
 		// texts
-		this.mScoreText = new ChangeableText(100, 600, this.mFont, "Score: 0", "Score: XXXX".length());
-		this.mSelectionText = new ChangeableText(600, 600, this.mFont, "Selection: 0", "Selection: XXXX".length());
+		this.mScoreText = new ChangeableText(100, cameraHeight - fontSize - fontSize / 3, this.mFont, "Score: 0", "Score: XXXX".length());
+		this.mSelectionText = new ChangeableText(600, cameraHeight - fontSize - fontSize / 3, this.mFont, "Selection: 0", "Selection: XXXX".length());
 		
 		// game over with a nice animation
 		this.mGameOverText = new Text(0, 0, this.mFont2, getString(R.string.game_over), HorizontalAlign.CENTER);
-        this.mGameOverText.setPosition((CAMERA_WIDTH - this.mGameOverText.getWidth()) * 0.5f, (CAMERA_HEIGHT - this.mGameOverText.getHeight()) * 0.5f);
+        this.mGameOverText.setPosition((cameraWidth - this.mGameOverText.getWidth()) * 0.5f, (cameraHeight - this.mGameOverText.getHeight()) * 0.5f);
         this.mGameOverText.registerEntityModifier(new ScaleModifier(3, 0.1f, 2.0f));
         this.mGameOverText.registerEntityModifier(new RotationModifier(3, 0, 720));
         
@@ -239,13 +269,16 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		mediumItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
 		scene.addMenuItem(mediumItem);
 		
-		final IMenuItem hardItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_GAME_HARD, this.mFont2, getString(R.string.hard)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
-		hardItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
-		scene.addMenuItem(hardItem);
-		
-		final IMenuItem crazyItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_GAME_CRAZY, this.mFont2, getString(R.string.crazy)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
-		crazyItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
-		scene.addMenuItem(crazyItem);
+		if (mLargeScreen) {
+			// This modes only on large screens
+			final IMenuItem hardItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_GAME_HARD, this.mFont2, getString(R.string.hard)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
+			hardItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
+			scene.addMenuItem(hardItem);
+			
+			final IMenuItem crazyItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_GAME_CRAZY, this.mFont2, getString(R.string.crazy)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
+			crazyItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
+			scene.addMenuItem(crazyItem);
+		}
 		
 		final IMenuItem backMenuItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_BACK, this.mFont2, getString(R.string.back)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
 		backMenuItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
@@ -275,11 +308,11 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 			mTableScene.setChildScene(this.mSelectGameScene, false, true, true);
 			return true;
 		case MENU_GAME_NOVICE: // small game
-			mTable.createTable(4, 4, 3);
+			mTable.createTable(6, 6, 3);
 			mSelectGameScene.back();
 			return true;
 		case MENU_GAME_MEDIUM: // medium size game
-			mTable.createTable(8, 8, 3);
+			mTable.createTable(12, 7, 3);
 			mSelectGameScene.back();
 			return true;
 		case MENU_GAME_HARD: // hard game
@@ -289,10 +322,6 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		case MENU_GAME_CRAZY: // very hard game
 			mTable.createTable(17, 9, textures.length);
 			mSelectGameScene.back();
-			return true;
-		case MENU_BACK: // this menu goes back from any children scene to the menu
-			mTableScene.getChildScene().back();
-			mTableScene.setChildScene(this.mMenuScene, false, true, true);
 			return true;
 		case MENU_QUIT: // end activity
 			this.finish();
@@ -304,7 +333,7 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 	
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-    	// appart from the menu, we manage the "back button"
+    	// Apart from the menu, we manage the "back button"
         if (keyCode == KeyEvent.KEYCODE_BACK && event.getRepeatCount() == 0) {
         	if (mTableScene.hasChildScene()) {
         		// if the mTableScene has any children, we are in a menu
