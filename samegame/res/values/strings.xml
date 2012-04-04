@@ -9,5 +9,10 @@
     <string name="hard">Hard</string>
     <string name="crazy">Crazy</string>
     <string name="game_over">Game over</string>
+    <string name="new_record">New top score!</string>
+    <string name="selection">"Selection: "</string>
+    <string name="top">"Top: "</string>
+    <string name="score">"Score: "</string>
+    
 
 </resources>

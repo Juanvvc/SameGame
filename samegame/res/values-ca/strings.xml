@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Samegame</string>
+    <string name="quit">Eixir</string>
+    <string name="new_game">Nou joc</string>
+    <string name="back">Tornar</string>
+    <string name="novice_game">Principiant</string>
+    <string name="medium_game">Mitjà</string>
+    <string name="hard">Difícil</string>
+    <string name="crazy">Foll!</string>
+    <string name="game_over">Fi del joc</string>
+    <string name="new_record">Nou record!</string>
+    <string name="selection">"Selecció: "</string>
+    <string name="top">"Record: "</string>
+    <string name="score">"Puntuació: "</string>
+
+</resources>

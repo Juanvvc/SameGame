@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Samegame</string>
+    <string name="quit">Salir</string>
+    <string name="new_game">Jugar</string>
+    <string name="back">Volver</string>
+    <string name="novice_game">Principiante</string>
+    <string name="medium_game">Medio</string>
+    <string name="hard">Difícil</string>
+    <string name="crazy">Locura</string>
+    <string name="game_over">Fin de juego</string>
+    <string name="new_record">¡Nuevo record!</string>
+    <string name="selection">"Selección: "</string>
+    <string name="top">"Record: "</string>
+    <string name="score">"Puntos: "</string>
+
+</resources>

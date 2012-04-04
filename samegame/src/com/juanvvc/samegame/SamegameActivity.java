@@ -32,19 +32,22 @@ import org.anddev.andengine.opengl.texture.region.TiledTextureRegion;
 import org.anddev.andengine.ui.activity.BaseGameActivity;
 import org.anddev.andengine.util.HorizontalAlign;
 
+import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.os.Bundle;
 import android.view.Display;
 import android.view.KeyEvent;
 
 public class SamegameActivity extends BaseGameActivity implements IOnMenuItemClickListener {
-	private static final int MENU_NEW_GAME = 0;
-	private static final int MENU_TOP_SCORES = 1;
-	private static final int MENU_QUIT = 3;
-	private static final int MENU_GAME_NOVICE = 4;
-	private static final int MENU_GAME_MEDIUM = 5;
-	private static final int MENU_GAME_HARD = 6;
-	private static final int MENU_GAME_CRAZY = 7;
-	private static final int MENU_BACK = 8;
+	private static final int MENU_NEW_GAME = 30;
+	private static final int MENU_QUIT = 32;
+	private static final int MENU_GAME_NOVICE = 0; // game types should be 0..n
+	private static final int MENU_GAME_MEDIUM = 1;
+	private static final int MENU_GAME_HARD = 2;
+	private static final int MENU_GAME_CRAZY = 3;
+	private static final int MENU_BACK = 33;
+	
+	public static final String PREFS_NAME = "TopScores";
 	
 	/** Constant TAG useful for debugging. */
 	public static final String TAG = "SameGame";
@@ -82,24 +85,47 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 	private ChangeableText mScoreText;
 	/** The selection text. */
 	private ChangeableText mSelectionText;
-	/** Game over text. */
-	private Text mGameOverText;
+	/** Identifier of the current game type (novice, medium...). */
+	private int currentGameType = 0;
 	/** Tiled background. */
 	private RepeatingSpriteBackground mBackground;
+	/** Top scores in each mode. Index are MENU_GAME_NOVICE... */
+	private int[] topScores = new int[4];
 
 	/** A reference to the table of the game. */
 	private Table mTable;
 
 	/** Main scene: the table game. */
 	private Scene mTableScene;
-	/** Scene "show top scores.
-	 * TODO: code this scene.
-	 */
-	private Scene mScoresScene;
 	/** Scene: main menu. */
 	private Scene mMenuScene;
 	/** Scene: select new game. */
 	private Scene mSelectGameScene;
+	
+	@Override
+	protected void onCreate(Bundle state) {
+		super.onCreate(state);
+		// restore top scores
+		SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+		topScores[0] = settings.getInt("scores0", 0);
+		topScores[1] = settings.getInt("scores1", 0);
+		topScores[2] = settings.getInt("scores2", 0);
+		topScores[3] = settings.getInt("scores3", 0);
+	}
+
+	@Override
+	protected void onStop() {
+		super.onStop();
+		// we only use this method to save top scores
+		SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+		SharedPreferences.Editor editor = settings.edit();
+		editor.putInt("scores0", topScores[0]);
+		editor.putInt("scores1", topScores[1]);
+		editor.putInt("scores2", topScores[2]);
+		editor.putInt("scores3", topScores[3]);
+		// Commit the edits!
+		editor.commit();
+	}
 
 	@Override
 	public final void onLoadComplete() {
@@ -192,7 +218,6 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 			this.mEngine.registerUpdateHandler(new FPSLogger());
 		}
 		// create the scenes
-		this.mScoresScene = createScoresScene();
 		this.mMenuScene = createMenuScene();
 		this.mSelectGameScene = createSelectGameScene();
 		this.mTableScene = createTableScene();
@@ -217,15 +242,9 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		scene.setBackground(mBackground);
 
 		// texts
-		this.mScoreText = new ChangeableText(100, cameraHeight - fontSize - fontSize / 3, this.mFont, "Score: 0", "Score: XXXX".length());
-		this.mSelectionText = new ChangeableText(600, cameraHeight - fontSize - fontSize / 3, this.mFont, "Selection: 0", "Selection: XXXX".length());
+		this.mScoreText = new ChangeableText(cameraWidth / 2, cameraHeight - fontSize - fontSize / 3, this.mFont, getString(R.string.score) + 0, (getString(R.string.score) + "XXXX").length());
+		this.mSelectionText = new ChangeableText(cameraWidth / 6, mScoreText.getY(), this.mFont, getString(R.string.selection) + 0, (getString(R.string.selection) + "XXXX").length());
 		
-		// game over with a nice animation
-		this.mGameOverText = new Text(0, 0, this.mFont2, getString(R.string.game_over), HorizontalAlign.CENTER);
-        this.mGameOverText.setPosition((cameraWidth - this.mGameOverText.getWidth()) * 0.5f, (cameraHeight - this.mGameOverText.getHeight()) * 0.5f);
-        this.mGameOverText.registerEntityModifier(new ScaleModifier(3, 0.1f, 2.0f));
-        this.mGameOverText.registerEntityModifier(new RotationModifier(3, 0, 720));
-        
         // note that texts are not attached to the scene: they are attached inside Table()
         
 		// create the table
@@ -308,18 +327,22 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 			mTableScene.setChildScene(this.mSelectGameScene, false, true, true);
 			return true;
 		case MENU_GAME_NOVICE: // small game
+			currentGameType = MENU_GAME_NOVICE;
 			mTable.createTable(6, 6, 3);
 			mSelectGameScene.back();
 			return true;
 		case MENU_GAME_MEDIUM: // medium size game
+			currentGameType = MENU_GAME_MEDIUM;
 			mTable.createTable(12, 7, 3);
 			mSelectGameScene.back();
 			return true;
 		case MENU_GAME_HARD: // hard game
+			currentGameType = MENU_GAME_HARD;
 			mTable.createTable(17, 9, 3);
 			mSelectGameScene.back();
 			return true;
 		case MENU_GAME_CRAZY: // very hard game
+			currentGameType = MENU_GAME_CRAZY;
 			mTable.createTable(17, 9, textures.length);
 			mSelectGameScene.back();
 			return true;
@@ -358,8 +381,21 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 	
 	/** Shows the game over on the screen and updates the top score list. */
 	private void doGameOver() {
-		mTableScene.attachChild(SamegameActivity.this.mGameOverText);
 		mTableScene.clearTouchAreas();
+		// check top scores
+		int s = mTable.getScore();
+		String msg = getString(R.string.game_over);
+		if (this.topScores[currentGameType] < s) {
+			this.topScores[currentGameType] = s;
+			msg = getString(R.string.new_record);
+		}
+		
+		// game over with a nice animation
+		Text text = new Text(0, 0, this.mFont2, msg, HorizontalAlign.CENTER);
+        text.setPosition((cameraWidth - text.getWidth()) * 0.5f, (cameraHeight - text.getHeight()) * 0.5f);
+        text.registerEntityModifier(new ScaleModifier(3, 0.1f, 2.0f));
+        text.registerEntityModifier(new RotationModifier(3, 0, 720));
+        mTableScene.attachChild(text);
 	}
 	
 	//////////////// Inner classes
@@ -442,6 +478,9 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 					
 					mScene.attachChild(mScoreText);
 					mScene.attachChild(mSelectionText);
+					// and the top score message
+					final Text text = new Text(4 * cameraWidth / 5, mScoreText.getY(), mFont, getString(R.string.top) + topScores[currentGameType], HorizontalAlign.LEFT);
+					mScene.attachChild(text);
 				}
 			});
 		}
@@ -582,8 +621,8 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 			currentlySelected = -1;
 			
 			// update scores
-			mScoreText.setText("Score: " + score);
-			mSelectionText.setText("Selection: 0");
+			mScoreText.setText(getString(R.string.score) + score);
+			mSelectionText.setText(getString(R.string.selection) + 0);
 			
 			// Finally, test if end of game
 			if (Table.this.endOfGame()) {
@@ -640,11 +679,14 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 			return score;
 		}
 		
-		/** Check if the game is over.
-		 * @return true If we are at the end of the game */
+		/** Check if the game is over. Call this method only once!
+		 * @return true If we are at the end of the game. */
 		public boolean endOfGame() {
 			// if there is no ball in the left-bottom corner, we finished
 			if (table[totalRows-1][0] == null) {
+				// if the table is empty, add 1000 points
+				score += 1000;
+				mScoreText.setText(getString(R.string.score) + score);
 				return true;
 			}
 			// check for horizontal pairs
@@ -774,7 +816,7 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 
 		/** @return If the ball is in movement */
 		public boolean isMoving() {
-			// we define "in movement" as "speed different to 0"
+			// we define "moving" as "speed different to 0"
 			return !(this.mPhysics.getVelocityX() == 0 && this.mPhysics.getVelocityY() == 0);
 		}
 
@@ -886,7 +928,7 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 								mTable.setCurrentlySelected(s);
 							}
 							// Update the score of the selection
-							mSelectionText.setText("Selection: " + mTable.getSelectionScore());
+							mSelectionText.setText(getString(R.string.selection) + mTable.getSelectionScore());
 						}
 					}
 				});
