@@ -168,14 +168,6 @@ public class SamegameActivity extends BaseGameActivity {
 		private Scene mScene;
 
 		/**
-		 * Removed balls. Most of this class runs in the UI thread. In
-		 * AndEngine, objects must be detached from the scene in a different
-		 * thread or IndexOutOfBoundExceptions appear. This array is used to
-		 * track the balls that need to be removed.
-		 */
-		private ArrayList<Ball> deletedBalls = new ArrayList<Ball>();
-
-		/**
 		 * Creates a new table for a game.
 		 *
 		 * @param c Number of columns in the table.
@@ -265,26 +257,9 @@ public class SamegameActivity extends BaseGameActivity {
 		}
 
 		/**
-		 * Get the balls that were removed in the last call to
-		 * removeSelectedBalls(). Warning: the internal array of removed balls
-		 * is cleared in this call! That means that if you ignore the contents
-		 * of the returned array, it will be gone forever and balls will remain
-		 * in the scene. Too bad.
-		 *
-		 * @return The balls that were deleted during last removeSelectedBalls()
-		 */
-		public ArrayList<Ball> getDeletedBalls() {
-			ArrayList<Ball> b = new ArrayList<Ball>(this.deletedBalls);
-			this.deletedBalls.clear();
-			return b;
-		}
-
-		/**
 		 * Removes selected balls, and moves the other balls to fill the blanks.
-		 * This method is usually called inside the UI thread, so balls are not
-		 * detached from the scene. They are added to an internal array, and you
-		 * should call getDeletedBalls() outside the UI thread to actually
-		 * detach them.
+		 * Do not call this method from the UI thread! This method detaches
+		 * Balls from the scene, and you cannot do this from the UI thread.
 		 */
 		public void removeSelectedBalls() {
 			// remove selected balls and empty spaces
@@ -293,11 +268,14 @@ public class SamegameActivity extends BaseGameActivity {
 			// the new table
 			Ball[][] newTable = new Ball[table.length][table[0].length];
 			
+			myLog.d(TAG, "Removing selected balls");
+			
 			// update the score
 			int ss = getSelectionScore();
 			if (ss < 1) {
 				// if the selection score is less than 1, return immediately (rules of the game)
 				// actually, this is a last minute check of a situation than shouldn't be allowed
+				myLog.w(TAG, "Selection less than 1");
 				return;
 			}
 			score += ss;			
@@ -319,7 +297,8 @@ public class SamegameActivity extends BaseGameActivity {
 							b.setVisible(false);
 							b.stopAnimation();
 							b.clearUpdateHandlers();
-							this.deletedBalls.add(b);
+							// you cannot run the next line within the UI thread!!!!
+							b.detachSelf();
 							// remove from the table
 							table[i][j] = null;
 						}
@@ -352,22 +331,10 @@ public class SamegameActivity extends BaseGameActivity {
 			mScoreText.setText("Score: " + score);
 			mSelectionText.setText("Selection: 0");
 			
-			// This thread runs out of the UI thread
-			// Scene modifications (such as detaching, new elements and so)
-			// must be performed in this thread.
-			SamegameActivity.this.runOnUpdateThread(new Runnable() {
-				public void run() {
-					// first: detach removed balls
-					myLog.d(TAG, "Removing balls");
-					for (Ball b : mTable.getDeletedBalls()) {
-						b.detachSelf();
-					}
-					// second, test end of game
-					if (Table.this.endOfGame()) {
-						mScene.attachChild(SamegameActivity.this.mGameOverText);
-					}
-				}
-			});
+			// Finally, test if end of game
+			if (Table.this.endOfGame()) {
+				mScene.attachChild(SamegameActivity.this.mGameOverText);
+			}
 		}
 
 		/** @return True if all balls in the table are still */
@@ -630,35 +597,45 @@ public class SamegameActivity extends BaseGameActivity {
 				final float pTouchAreaLocalX, final float pTouchAreaLocalY) {
 			// we only manage "down" events
 			if (pSceneTouchEvent.isActionDown()) {
-				// if there are balls in movement, ignore the event
-				if (!mTable.stillTable()) {
-					myLog.d(TAG, "Table is not still");
-					return true;
-				} else {
-					myLog.d(TAG, "Table is still");
-				}
-
-				if (isSelected()) {
-					// if the ball was selected in a previous movement, remove
-					// selected balls
-					this.mTable.removeSelectedBalls();
-				} else {
-					// the ball was not selected:
-					// remove all selections
-					this.mTable.clearSelection();
-					// and select the adjacent balls
-					int s = this.mTable.selectBall(this.col, this.row, -1);
-					// rules of the game: you cannot select only one ball
-					if (s < 2) {
-						// if less than 2 selections, we are the only selected ball
-						this.setSelected(false);
-						mTable.setCurrentlySelected(0);
-					} else {
-						mTable.setCurrentlySelected(s);
+				// the onEvent() is managed in a different thread.
+				// If you run this in the UI thread, a run condition occurs
+				// sometimes: Balls that have not been run yet and then
+				// are not in position but isMoving()
+				runOnUpdateThread(new Runnable() {
+					public void run() {
+						// if there are balls in movement, ignore the event
+						myLog.d(TAG, "Pressing " + col + ", " + row + " selected=" + isSelected() + " moving=" + isMoving());
+						if (!mTable.stillTable()) {
+							myLog.d(TAG, "Table is not still");
+							return;
+						} else {
+							myLog.d(TAG, "Table is still");
+						}
+		
+						if (isSelected()) {
+							// if the ball was selected in a previous movement, remove
+							// selected balls. This call is safe since we are not in the
+							// UI thread
+							mTable.removeSelectedBalls();
+						} else {
+							// the ball was not selected:
+							// remove all selections
+							mTable.clearSelection();
+							// and select the adjacent balls
+							int s = mTable.selectBall(col, row, -1);
+							// rules of the game: you cannot select only one ball
+							if (s < 2) {
+								// if less than 2 selections, we are the only selected ball
+								mTable.clearSelection();
+								mTable.setCurrentlySelected(0);
+							} else {
+								mTable.setCurrentlySelected(s);
+							}
+							// Update the score of the selection
+							mSelectionText.setText("Selection: " + mTable.getSelectionScore());
+						}
 					}
-					// Update the score of the selection
-					mSelectionText.setText("Selection: " + mTable.getSelectionScore());
-				}
+				});
 				return true;
 			}
 			return false; // remember: we only manager down events
