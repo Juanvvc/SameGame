@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <string name="hello">Hello World, SamegameActivity!</string>
     <string name="app_name">Samegame</string>
+    <string name="quit">Quit</string>
+    <string name="new_game">New Game</string>
+    <string name="back">Back</string>
+    <string name="novice_game">Novice</string>
+    <string name="medium_game">Medium</string>
+    <string name="hard">Hard</string>
+    <string name="crazy">Crazy</string>
+    <string name="game_over">Game over</string>
 
 </resources>

@@ -1,6 +1,6 @@
 package com.juanvvc.samegame;
 
-import java.util.ArrayList;
+import javax.microedition.khronos.opengles.GL10;
 
 import org.anddev.andengine.engine.Engine;
 import org.anddev.andengine.engine.camera.Camera;
@@ -11,7 +11,12 @@ import org.anddev.andengine.engine.options.resolutionpolicy.RatioResolutionPolic
 import org.anddev.andengine.entity.modifier.RotationModifier;
 import org.anddev.andengine.entity.modifier.ScaleModifier;
 import org.anddev.andengine.entity.scene.Scene;
-import org.anddev.andengine.entity.scene.background.ColorBackground;
+import org.anddev.andengine.entity.scene.background.RepeatingSpriteBackground;
+import org.anddev.andengine.entity.scene.menu.MenuScene;
+import org.anddev.andengine.entity.scene.menu.MenuScene.IOnMenuItemClickListener;
+import org.anddev.andengine.entity.scene.menu.item.IMenuItem;
+import org.anddev.andengine.entity.scene.menu.item.TextMenuItem;
+import org.anddev.andengine.entity.scene.menu.item.decorator.ColorMenuItemDecorator;
 import org.anddev.andengine.entity.sprite.AnimatedSprite;
 import org.anddev.andengine.entity.text.ChangeableText;
 import org.anddev.andengine.entity.text.Text;
@@ -22,13 +27,24 @@ import org.anddev.andengine.opengl.font.FontFactory;
 import org.anddev.andengine.opengl.texture.TextureOptions;
 import org.anddev.andengine.opengl.texture.atlas.bitmap.BitmapTextureAtlas;
 import org.anddev.andengine.opengl.texture.atlas.bitmap.BitmapTextureAtlasTextureRegionFactory;
+import org.anddev.andengine.opengl.texture.atlas.bitmap.source.AssetBitmapTextureAtlasSource;
 import org.anddev.andengine.opengl.texture.region.TiledTextureRegion;
 import org.anddev.andengine.ui.activity.BaseGameActivity;
 import org.anddev.andengine.util.HorizontalAlign;
 
 import android.graphics.Color;
+import android.view.KeyEvent;
 
-public class SamegameActivity extends BaseGameActivity {
+public class SamegameActivity extends BaseGameActivity implements IOnMenuItemClickListener {
+	private static final int MENU_NEW_GAME = 0;
+	private static final int MENU_TOP_SCORES = 1;
+	private static final int MENU_QUIT = 3;
+	private static final int MENU_GAME_NOVICE = 4;
+	private static final int MENU_GAME_MEDIUM = 5;
+	private static final int MENU_GAME_HARD = 6;
+	private static final int MENU_GAME_CRAZY = 7;
+	private static final int MENU_BACK = 8;
+	
 	/** Constant TAG useful for debugging. */
 	public static final String TAG = "SameGame";
 
@@ -46,19 +62,32 @@ public class SamegameActivity extends BaseGameActivity {
 	 * handles this animation.
 	 */
 	private TiledTextureRegion[] textures;
-	/** Font texture. */
-	private BitmapTextureAtlas mFontTexture;
 	/** Font. */
 	private Font mFont;
+	/** The same Font, twice the size. */
+	private Font mFont2;
 	/** The score text. */
 	private ChangeableText mScoreText;
 	/** The selection text. */
 	private ChangeableText mSelectionText;
 	/** Game over text. */
 	private Text mGameOverText;
+	/** Tiled background. */
+	private RepeatingSpriteBackground mBackground;
 
 	/** A reference to the table of the game. */
 	private Table mTable;
+
+	/** Main scene: the table game. */
+	private Scene mTableScene;
+	/** Scene "show top scores.
+	 * TODO: code this scene.
+	 */
+	private Scene mScoresScene;
+	/** Scene: main menu. */
+	private Scene mMenuScene;
+	/** Scene: select new game. */
+	private Scene mSelectGameScene;
 
 	@Override
 	public final void onLoadComplete() {
@@ -106,12 +135,19 @@ public class SamegameActivity extends BaseGameActivity {
 		// Finally, load the real textures
 		this.mEngine.getTextureManager().loadTexture(this.mBalls);
 		
+		this.mBackground = new RepeatingSpriteBackground(CAMERA_WIDTH, CAMERA_HEIGHT, this.mEngine.getTextureManager(), new AssetBitmapTextureAtlasSource(this, "back.png"));
+
+		
 		// manage fonts
-		this.mFontTexture = new BitmapTextureAtlas(256, 256, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
+		final BitmapTextureAtlas mFontTexture = new BitmapTextureAtlas(256, 256, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
 		FontFactory.setAssetBasePath("fonts/");
-		this.mFont = FontFactory.createFromAsset(this.mFontTexture, this, "Brivido.ttf", 36, true, Color.WHITE);
-		this.mEngine.getTextureManager().loadTexture(this.mFontTexture);
+		this.mFont = FontFactory.createFromAsset(mFontTexture, this, "Brivido.ttf", 36, true, Color.WHITE);
+		final BitmapTextureAtlas mFontTexture2 = new BitmapTextureAtlas(512, 512, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
+		this.mFont2 = FontFactory.createFromAsset(mFontTexture2, this, "Brivido.ttf", 72, true, Color.WHITE);
+		this.mEngine.getTextureManager().loadTexture(mFontTexture);
+		this.mEngine.getTextureManager().loadTexture(mFontTexture2);
 		this.getFontManager().loadFont(this.mFont);
+		this.getFontManager().loadFont(this.mFont2);
 
 	}
 
@@ -125,28 +161,179 @@ public class SamegameActivity extends BaseGameActivity {
 		if (myLog.DEBUG) {
 			this.mEngine.registerUpdateHandler(new FPSLogger());
 		}
+		// create the scenes
+		this.mScoresScene = createScoresScene();
+		this.mMenuScene = createMenuScene();
+		this.mSelectGameScene = createSelectGameScene();
+		this.mTableScene = createTableScene();
 
+		// mTableScene is the main scene.
+		// Anyway, show the menu as a child scene
+		mTableScene.setChildScene(mMenuScene);
+		
+		return this.mTableScene;
+	}
+	
+	// ////////////////Scenes
+	
+	/** The table scene is the main scene. The others are child scenes of this one.
+	 * @return The table scene.
+	 */
+	public Scene createTableScene() {
 		final Scene scene = new Scene();
 
-		// background color
-		scene.setBackground(new ColorBackground(0.1f, 0.1f, 0.1f));
-
-		// create the table
-		mTable = new Table(17, 9, scene); // 17,9
+		// background
+		//scene.setBackground(new ColorBackground(0.1f, 0.1f, 0.1f));
+		scene.setBackground(mBackground);
 
 		// texts
 		this.mScoreText = new ChangeableText(100, 600, this.mFont, "Score: 0", "Score: XXXX".length());
 		this.mSelectionText = new ChangeableText(600, 600, this.mFont, "Selection: 0", "Selection: XXXX".length());
-		this.mGameOverText = new Text(0, 0, this.mFont, "Game Over", HorizontalAlign.CENTER);
+		
+		// game over with a nice animation
+		this.mGameOverText = new Text(0, 0, this.mFont2, getString(R.string.game_over), HorizontalAlign.CENTER);
         this.mGameOverText.setPosition((CAMERA_WIDTH - this.mGameOverText.getWidth()) * 0.5f, (CAMERA_HEIGHT - this.mGameOverText.getHeight()) * 0.5f);
         this.mGameOverText.registerEntityModifier(new ScaleModifier(3, 0.1f, 2.0f));
         this.mGameOverText.registerEntityModifier(new RotationModifier(3, 0, 720));
-		
-		scene.attachChild(this.mScoreText);
-		scene.attachChild(this.mSelectionText);
+        
+        // note that texts are not attached to the scene: they are attached inside Table()
+        
+		// create the table
+		mTable = new Table(17, 9, scene); // 17,9
 		
 		return scene;
 	}
+	
+	/** @return The main menu scene. */
+	public Scene createMenuScene() {
+		MenuScene scene = new MenuScene(this.mCamera);
+		
+		scene.setBackground(mBackground);
+
+		final IMenuItem newGameItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_NEW_GAME, this.mFont2, getString(R.string.new_game)), 1.0f,0.0f,0.0f, 1.0f,1.0f,1.0f);
+		newGameItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
+		scene.addMenuItem(newGameItem);
+
+		final IMenuItem quitMenuItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_QUIT, this.mFont2, getString(R.string.quit)), 1.0f,0.0f,0.0f, 1.0f,1.0f,1.0f);
+		quitMenuItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
+		scene.addMenuItem(quitMenuItem);
+		
+		scene.buildAnimations();
+
+		scene.setOnMenuItemClickListener(this);
+		
+		return scene;
+	}
+	
+	/** @return The menu "select type of game" */
+	public Scene createSelectGameScene() {
+		MenuScene scene = new MenuScene(this.mCamera);
+		
+		scene.setBackground(mBackground);
+
+		final IMenuItem noviceItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_GAME_NOVICE, this.mFont2, getString(R.string.novice_game)), 1.0f,0.0f,0.0f, 1.0f,1.0f,1.0f);
+		noviceItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
+		scene.addMenuItem(noviceItem);
+		
+		final IMenuItem mediumItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_GAME_MEDIUM, this.mFont2, getString(R.string.medium_game)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
+		mediumItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
+		scene.addMenuItem(mediumItem);
+		
+		final IMenuItem hardItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_GAME_HARD, this.mFont2, getString(R.string.hard)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
+		hardItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
+		scene.addMenuItem(hardItem);
+		
+		final IMenuItem crazyItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_GAME_CRAZY, this.mFont2, getString(R.string.crazy)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
+		crazyItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
+		scene.addMenuItem(crazyItem);
+		
+		final IMenuItem backMenuItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_BACK, this.mFont2, getString(R.string.back)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
+		backMenuItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
+		scene.addMenuItem(backMenuItem);
+		
+		scene.buildAnimations();
+
+		scene.setOnMenuItemClickListener(this);
+		
+		return scene;
+	}
+	
+	/** @return The top scores scene */
+	public Scene createScoresScene() {
+		return null;
+	}
+	
+	/////////////// Manage the menu
+	
+	@Override
+	public boolean onMenuItemClicked(final MenuScene pMenuScene, final IMenuItem pMenuItem, final float pMenuItemLocalX, final float pMenuItemLocalY) {
+		switch(pMenuItem.getID()) {
+		case MENU_NEW_GAME: // show the list of game types
+			// remove mMenuScene (that is "go back from this scene")
+			mMenuScene.back();
+			// show mSelectGameScene
+			mTableScene.setChildScene(this.mSelectGameScene, false, true, true);
+			return true;
+		case MENU_GAME_NOVICE: // small game
+			mTable.createTable(4, 4, 3);
+			mSelectGameScene.back();
+			return true;
+		case MENU_GAME_MEDIUM: // medium size game
+			mTable.createTable(8, 8, 3);
+			mSelectGameScene.back();
+			return true;
+		case MENU_GAME_HARD: // hard game
+			mTable.createTable(17, 9, 3);
+			mSelectGameScene.back();
+			return true;
+		case MENU_GAME_CRAZY: // very hard game
+			mTable.createTable(17, 9, textures.length);
+			mSelectGameScene.back();
+			return true;
+		case MENU_BACK: // this menu goes back from any children scene to the menu
+			mTableScene.getChildScene().back();
+			mTableScene.setChildScene(this.mMenuScene, false, true, true);
+			return true;
+		case MENU_QUIT: // end activity
+			this.finish();
+			return true;
+		default:
+			return false;
+		}
+	}
+	
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+    	// appart from the menu, we manage the "back button"
+        if (keyCode == KeyEvent.KEYCODE_BACK && event.getRepeatCount() == 0) {
+        	if (mTableScene.hasChildScene()) {
+        		// if the mTableScene has any children, we are in a menu
+        		if (mTableScene.getChildScene() == mMenuScene) {
+        			// back from main menu: finish
+        			finish();
+        			return true;
+        		} else {
+        			// back from any other menu: show main menu
+        			mTableScene.getChildScene().back();
+        			mTableScene.setChildScene(this.mMenuScene, false, true, true);
+        			return true;
+        		}
+        	} else {
+        		// back from main scene: show main menu
+        		mTableScene.setChildScene(this.mMenuScene, false, true, true);
+        	}
+        	return true;
+        }
+        return false;
+    }
+	
+	/** Shows the game over on the screen and updates the top score list. */
+	private void doGameOver() {
+		mTableScene.attachChild(SamegameActivity.this.mGameOverText);
+		mTableScene.clearTouchAreas();
+	}
+	
+	//////////////// Inner classes
 
 	/**
 	 * This class handles the table of a game. It loads balls, removes them...
@@ -158,6 +345,8 @@ public class SamegameActivity extends BaseGameActivity {
 		private int totalRows = 0;
 		/** Total number of cols in the table. */
 		private int totalCols = 0;
+		/** The maximum number of ball types on the table. */
+		private int maxtypes = 0;
 		/** Balls in the table. */
 		private Ball[][] table;
 		/** Current score. */
@@ -175,25 +364,59 @@ public class SamegameActivity extends BaseGameActivity {
 		 * @param scene The scene of the game.
 		 */
 		public Table(final int c, final int r, final Scene scene) {
-			table = new Ball[r][c];
-			totalRows = r;
-			totalCols = c;
-			// Create the balls for the game
-			for (int i = 0; i < r; i++) {
-				for (int j = 0; j < c; j++) {
-					int randomSelection = (int) (Math.random() * textures.length);
-					table[i][j] = new Ball(j, i, randomSelection, this,	textures[randomSelection]);
-					// attach childs to the scene
-					scene.attachChild(table[i][j]);
-					// balls manage the "onClick" event. Maybe faster if the
-					// table manages that?
-					scene.registerTouchArea(table[i][j]);
-				}
-			}
-			scene.setTouchAreaBindingEnabled(true);
+			scene.setTouchAreaBindingEnabled(false);
 			score = 0;
 			mScene = scene;
+			createTable(c, r, textures.length);
 		}
+		
+		/** Create a new table.
+		 * The table is not created immediately, but in the next update */
+		public void createTable(int c, int r, int mt) {
+			totalRows = r;
+			totalCols = c;
+			maxtypes = mt;
+			runOnUpdateThread(new Runnable() {
+				public void run() {
+					// first, remove any previous table
+					if (table != null) {
+						for (int i = 0; i < table.length; i++) {
+							for (int j = 0; j < table[0].length; j++) {
+								if (table[i][j] != null) {
+									// possibly, these lines are not necessary
+									table[i][j].stopAnimation();
+									table[i][j].reset();
+									table[i][j].setVisible(false);
+								}
+							}
+						}
+					}
+					mScene.clearTouchAreas();
+					mScene.detachChildren();
+					
+					// create a new table
+					table = new Ball[totalRows][totalCols];
+					// Create the balls for the game
+					for (int i = 0; i < totalRows; i++) {
+						for (int j = 0; j < totalCols; j++) {
+							int randomSelection = (int) (Math.random() * maxtypes);
+							table[i][j] = new Ball(j, i, randomSelection, Table.this, textures[randomSelection]);
+							// attach children to the scene
+							mScene.attachChild(table[i][j]);
+							// balls manage the "onClick" event. Maybe faster if the
+							// table manages that?
+							mScene.registerTouchArea(table[i][j]);
+						}
+					}
+					mScene.setTouchAreaBindingEnabled(true);
+					score = 0;
+					
+					mScene.attachChild(mScoreText);
+					mScene.attachChild(mSelectionText);
+				}
+			});
+		}
+		
 
 		/**
 		 * Selects a ball and the ones close to it of the same type. This method
@@ -276,6 +499,7 @@ public class SamegameActivity extends BaseGameActivity {
 				// if the selection score is less than 1, return immediately (rules of the game)
 				// actually, this is a last minute check of a situation than shouldn't be allowed
 				myLog.w(TAG, "Selection less than 1");
+				clearSelection();
 				return;
 			}
 			score += ss;			
@@ -297,6 +521,7 @@ public class SamegameActivity extends BaseGameActivity {
 							b.setVisible(false);
 							b.stopAnimation();
 							b.clearUpdateHandlers();
+							mScene.unregisterTouchArea(b);
 							// you cannot run the next line within the UI thread!!!!
 							b.detachSelf();
 							// remove from the table
@@ -333,7 +558,7 @@ public class SamegameActivity extends BaseGameActivity {
 			
 			// Finally, test if end of game
 			if (Table.this.endOfGame()) {
-				mScene.attachChild(SamegameActivity.this.mGameOverText);
+				doGameOver();
 			}
 		}
 
