@@ -4,10 +4,12 @@ import javax.microedition.khronos.opengles.GL10;
 
 import org.anddev.andengine.engine.Engine;
 import org.anddev.andengine.engine.camera.Camera;
-import org.anddev.andengine.engine.handler.physics.PhysicsHandler;
 import org.anddev.andengine.engine.options.EngineOptions;
 import org.anddev.andengine.engine.options.EngineOptions.ScreenOrientation;
 import org.anddev.andengine.engine.options.resolutionpolicy.RatioResolutionPolicy;
+import org.anddev.andengine.entity.IEntity;
+import org.anddev.andengine.entity.modifier.IEntityModifier.IEntityModifierListener;
+import org.anddev.andengine.entity.modifier.MoveModifier;
 import org.anddev.andengine.entity.modifier.RotationModifier;
 import org.anddev.andengine.entity.modifier.ScaleModifier;
 import org.anddev.andengine.entity.scene.Scene;
@@ -31,6 +33,7 @@ import org.anddev.andengine.opengl.texture.atlas.bitmap.source.AssetBitmapTextur
 import org.anddev.andengine.opengl.texture.region.TiledTextureRegion;
 import org.anddev.andengine.ui.activity.BaseGameActivity;
 import org.anddev.andengine.util.HorizontalAlign;
+import org.anddev.andengine.util.modifier.IModifier;
 
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -420,6 +423,10 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		private int currentlySelected = 0;
 		/** The scene of the game */
 		private Scene mScene;
+		/** X offset to center the playing field. */
+		private int offsetX;
+		/** Y offset to center the playing field. */
+		private int offsetY;
 
 		/**
 		 * Creates a new table for a game.
@@ -441,6 +448,8 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 			totalRows = r;
 			totalCols = c;
 			maxtypes = mt;
+			offsetY = (int) (cameraHeight - r * BALL_SIZE - 1.3 * fontSize);
+			offsetX = (cameraWidth - c * BALL_SIZE) / 2;
 			runOnUpdateThread(new Runnable() {
 				public void run() {
 					// first, remove any previous table
@@ -707,6 +716,14 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 			}
 			return true;
 		}
+		
+		public int getXCol(final int c) {
+			return offsetX + c * BALL_SIZE;
+		}
+		
+		public int getYRow(final int r) {
+			return offsetY + r * BALL_SIZE;
+		}
 	}
 
 	/**
@@ -715,7 +732,7 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 	 *
 	 * @author juanvi
 	 */
-	private class Ball extends AnimatedSprite {
+	private class Ball extends AnimatedSprite implements IEntityModifierListener {
 		/** True if the ball is selected. */
 		private boolean selected;
 		/** A reference to the table. */
@@ -724,21 +741,16 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		private int col;
 		/** Row of this ball. */
 		private int row;
-		/** X valocity of the ball. */
-		private static final int VEL_X = -240;
-		/** Y velocity of the ball. */
-		private static final int VEL_Y = 240;
+		/** Movement duration. */
+		private static final float MOV_DURATION = 0.5f;
 		/** The type of this ball. */
 		private int type;
 		/** The size in pixels of this ball. Remember: sprites are squares. */
 		private int size;
-		/**
-		 * Movements are managed through a PhysicsHandler. To move the ball in
-		 * different frames, assign a speed and add the handler to the ball.
-		 */
-		private PhysicsHandler mPhysics;
 		/** Time between frame changes in animations. */
 		private static final int ANIM_TIME = 100;
+		/** If true, the ball is moving to position. */
+		private boolean moving = false;
 
 		/**
 		 * Create a new Ball.
@@ -750,15 +762,12 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		 * @param sp TextureRegion of the game
 		 */
 		public Ball(final int c, final int r, final int tp, final Table t, final TiledTextureRegion sp) {
-			super(c * sp.getTileWidth(), r * sp.getTileHeight(), sp.deepCopy());
+			super(t.getXCol(c), t.getYRow(r), sp.deepCopy());
 			row = r;
 			col = c;
 			mTable = t;
 			type = tp;
 			size = sp.getTileHeight();
-			// start without speed.
-			mPhysics = new PhysicsHandler(this);
-			mPhysics.setVelocity(0, 0);
 		}
 
 		// /////////////////// Getters and Setters
@@ -811,14 +820,13 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 				stopAnimation();
 			}
 		}
-
-		// ///////////// Internal methods
-
-		/** @return If the ball is in movement */
+		
+		/** @return True if the entity is moving. */
 		public boolean isMoving() {
-			// we define "moving" as "speed different to 0"
-			return !(this.mPhysics.getVelocityX() == 0 && this.mPhysics.getVelocityY() == 0);
+			return moving;
 		}
+		
+		// ///////////// Internal methods
 
 		/**
 		 * Moves the ball to the position that corresponds to (col, row). If
@@ -827,66 +835,14 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		 */
 		public void moveToPosition() {
 			if (mTable.isMovementAnimated()) {
-				int vel_x = VEL_X;
-				int vel_y = VEL_Y;
-				// if already there, do  not move
-				if (Math.abs(col * size - getX()) < size / 2) {
-					vel_x = 0;
-					setPosition(col * size, getY());
-				}
-				if (Math.abs(row * size - getY()) < size / 2) {
-					vel_y = 0;
-					setPosition(getX(), row * size);
-				}
-				// check that we still have speed in some direction
-				if (vel_x != 0 || vel_y != 0) {
-					this.mPhysics.setVelocity(vel_x, vel_y);
-					this.registerUpdateHandler(mPhysics);
-					this.animate(ANIM_TIME);
-				}
+				this.registerEntityModifier(new MoveModifier(MOV_DURATION, getX(), mTable.getXCol(col), getY(), mTable.getYRow(row), this));
 			} else {
 				this.setPosition(col * size, row * size);
 			}
 		}
-
+		
 		// //////////////////// Events
 
-		/**
-		 * Manages an update in the movement. This method is called in each
-		 * frame.
-		 *
-		 * @param pSecondsElapsed
-		 *            Seconds elapsed since last call.
-		 */
-		protected void onManagedUpdate(final float pSecondsElapsed) {
-			if (isMoving()) {
-				// if the ball is moving...
-				if (getX() < col * size) {
-					// check if we arrived to our horizontal place
-					this.mPhysics.setVelocityX(0);
-					this.setPosition(col * size, getY());
-				}
-				if (getY() > row * size) {
-					// check if we arrived to our vertical place
-					this.mPhysics.setVelocityY(0);
-					this.setPosition(getX(), row * size);
-				}
-				if (!isMoving()) {
-					// remember: we could stop the movement in the other ifs.
-					// we were in movement, but it is possible that not anymore
-
-					// if we stopped is because we arrived "more of less" to our
-					// position
-					// set the exact position.
-					this.setPosition(1.0f * col * size, 1.0f * row * size);
-					// unregister Physics
-					this.unregisterUpdateHandler(this.mPhysics);
-					// stop animation
-					this.stopAnimation();
-				}
-			}
-			super.onManagedUpdate(pSecondsElapsed);
-		}
 
 		/** Manages an "onClick()" event. */
 		public boolean onAreaTouched(final TouchEvent pSceneTouchEvent,
@@ -935,6 +891,18 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 				return true;
 			}
 			return false; // remember: we only manager down events
+		}
+
+		@Override
+		public void onModifierFinished(IModifier<IEntity> arg0, IEntity arg1) {
+			this.stopAnimation();
+			this.moving = false;
+		}
+
+		@Override
+		public void onModifierStarted(IModifier<IEntity> arg0, IEntity arg1) {
+			this.animate(ANIM_TIME);
+			this.moving = true;
 		}
 	}
 }
