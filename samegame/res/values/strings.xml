@@ -3,11 +3,11 @@
     <string name="app_name">Samegame</string>
     <string name="quit">Quit</string>
     <string name="new_game">New Game</string>
-    <string name="back">Back</string>
     <string name="novice_game">Novice</string>
-    <string name="medium_game">Medium</string>
-    <string name="hard">Hard</string>
-    <string name="crazy">Crazy</string>
+    <string name="medium_game">"Medium 3 colors"</string>
+    <string name="medium2_game">"Medium 4 colors"</string>
+    <string name="hard">"Large 3 colors"</string>
+    <string name="crazy">"Large 6 colors"</string>
     <string name="game_over">Game over</string>
     <string name="new_record">New top score!</string>
     <string name="selection">"Selection: "</string>

@@ -3,11 +3,11 @@
     <string name="app_name">Samegame</string>
     <string name="quit">Salir</string>
     <string name="new_game">Jugar</string>
-    <string name="back">Volver</string>
     <string name="novice_game">Principiante</string>
-    <string name="medium_game">Medio</string>
-    <string name="hard">Difícil</string>
-    <string name="crazy">Locura</string>
+    <string name="medium_game">"Medio 3 colores"</string>
+    <string name="medium2_game">"Medio 4 colores"</string>
+    <string name="hard">"Grande 3 colores"</string>
+    <string name="crazy">"Grande 6 colores"</string>
     <string name="game_over">Fin de juego</string>
     <string name="new_record">¡Nuevo record!</string>
     <string name="selection">"Selección: "</string>

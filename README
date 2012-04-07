@@ -1,10 +1,17 @@
 Yet another implementation of SameGame for Android.
 
-This code is under the GPL license. I'm the author of the graphics, and the
-font is available at the OpenFont library under the OFL license.
-(http://openfontlibrary.org/font/brivido)
+I'm the author of the graphics
+
+The Brivido font is available at the OpenFont library
+under the OFL license. (http://openfontlibrary.org/font/brivido)
+
+The click sound is under the Creative Commonns 0 license
+(http://www.freesound.org/people/martian/sounds/19284/)
+Sound is resampled to save resources. Blame me
+of the poor quality!
 
 The source code is under the GPLv3 license.
 
 (c) 2012, Juan Vera juanvvc@gmail.com
 Brivido open font: (c) 2012 Roberto Boschetto
+Cartoon sound: (c) 2006, martian/www.fork-media.com

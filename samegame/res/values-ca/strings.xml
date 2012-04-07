@@ -3,9 +3,9 @@
     <string name="app_name">Samegame</string>
     <string name="quit">Eixir</string>
     <string name="new_game">Nou joc</string>
-    <string name="back">Tornar</string>
     <string name="novice_game">Principiant</string>
     <string name="medium_game">Mitjà</string>
+    <string name="medium2_game">"Mitjà II"</string>
     <string name="hard">Difícil</string>
     <string name="crazy">Foll!</string>
     <string name="game_over">Fi del joc</string>

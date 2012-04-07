@@ -1,7 +1,11 @@
 package com.juanvvc.samegame;
 
+import java.io.IOException;
+
 import javax.microedition.khronos.opengles.GL10;
 
+import org.anddev.andengine.audio.sound.Sound;
+import org.anddev.andengine.audio.sound.SoundFactory;
 import org.anddev.andengine.engine.Engine;
 import org.anddev.andengine.engine.camera.Camera;
 import org.anddev.andengine.engine.options.EngineOptions;
@@ -36,6 +40,7 @@ import org.anddev.andengine.util.HorizontalAlign;
 import org.anddev.andengine.util.modifier.IModifier;
 
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Display;
@@ -46,9 +51,9 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 	private static final int MENU_QUIT = 32;
 	private static final int MENU_GAME_NOVICE = 0; // game types should be 0..n
 	private static final int MENU_GAME_MEDIUM = 1;
-	private static final int MENU_GAME_HARD = 2;
-	private static final int MENU_GAME_CRAZY = 3;
-	private static final int MENU_BACK = 33;
+	private static final int MENU_GAME_MEDIUM2 = 2;
+	private static final int MENU_GAME_HARD = 3;
+	private static final int MENU_GAME_CRAZY = 4; // this must be the last mode
 	
 	public static final String PREFS_NAME = "TopScores";
 	
@@ -93,7 +98,7 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 	/** Tiled background. */
 	private RepeatingSpriteBackground mBackground;
 	/** Top scores in each mode. Index are MENU_GAME_NOVICE... */
-	private int[] topScores = new int[4];
+	private int[] topScores = new int[MENU_GAME_CRAZY + 1];
 
 	/** A reference to the table of the game. */
 	private Table mTable;
@@ -105,15 +110,17 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 	/** Scene: select new game. */
 	private Scene mSelectGameScene;
 	
+	/** Reference to the click sound. */
+	private Sound clickSound;
+	
 	@Override
 	protected void onCreate(Bundle state) {
 		super.onCreate(state);
 		// restore top scores
 		SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
-		topScores[0] = settings.getInt("scores0", 0);
-		topScores[1] = settings.getInt("scores1", 0);
-		topScores[2] = settings.getInt("scores2", 0);
-		topScores[3] = settings.getInt("scores3", 0);
+		for (int i = 0; i < topScores.length; i++) {
+			topScores[i] = settings.getInt("scores" + i, 0);
+		}
 	}
 
 	@Override
@@ -122,13 +129,14 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		// we only use this method to save top scores
 		SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
 		SharedPreferences.Editor editor = settings.edit();
-		editor.putInt("scores0", topScores[0]);
-		editor.putInt("scores1", topScores[1]);
-		editor.putInt("scores2", topScores[2]);
-		editor.putInt("scores3", topScores[3]);
+		for (int i = 0; i < topScores.length; i++) {
+			editor.putInt("scores" + i, topScores[i]);
+		}
 		// Commit the edits!
 		editor.commit();
 	}
+	
+	/////////////////////// AndEngine events
 
 	@Override
 	public final void onLoadComplete() {
@@ -165,7 +173,8 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 				new EngineOptions(
 						true, ScreenOrientation.LANDSCAPE,
 						new RatioResolutionPolicy(cameraWidth, cameraHeight),
-						this.mCamera));
+						this.mCamera)
+				.setNeedsSound(true));
 	}
 
 	/** Load resources. */
@@ -196,6 +205,14 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		
 		this.mBackground = new RepeatingSpriteBackground(cameraWidth, cameraHeight, this.mEngine.getTextureManager(), new AssetBitmapTextureAtlasSource(this, "back.png"));
 
+		// Sounds
+//		
+		try {
+			this.clickSound = SoundFactory.createSoundFromAsset(this.mEngine.getSoundManager(), this, "click.ogg");
+		} catch (IOException e) {
+			myLog.w(TAG, "Sound cannot be loaded: " + e.toString());
+			this.clickSound = null;
+		}
 		
 		// manage fonts
 		final BitmapTextureAtlas mFontTexture = new BitmapTextureAtlas(256, 256, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
@@ -291,6 +308,10 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		mediumItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
 		scene.addMenuItem(mediumItem);
 		
+		final IMenuItem medium2Item = new ColorMenuItemDecorator(new TextMenuItem(MENU_GAME_MEDIUM2, this.mFont2, getString(R.string.medium2_game)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
+		medium2Item.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
+		scene.addMenuItem(medium2Item);
+		
 		if (mLargeScreen) {
 			// This modes only on large screens
 			final IMenuItem hardItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_GAME_HARD, this.mFont2, getString(R.string.hard)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
@@ -302,10 +323,6 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 			scene.addMenuItem(crazyItem);
 		}
 		
-		final IMenuItem backMenuItem = new ColorMenuItemDecorator(new TextMenuItem(MENU_BACK, this.mFont2, getString(R.string.back)), 1.0f,0.0f,0.0f,1.0f,1.0f,1.0f);
-		backMenuItem.setBlendFunction(GL10.GL_SRC_ALPHA, GL10.GL_ONE_MINUS_SRC_ALPHA);
-		scene.addMenuItem(backMenuItem);
-		
 		scene.buildAnimations();
 
 		scene.setOnMenuItemClickListener(this);
@@ -313,12 +330,26 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		return scene;
 	}
 	
-	/** @return The top scores scene */
-	public Scene createScoresScene() {
-		return null;
+	/** Shows the game over on the screen and updates the top score list. */
+	private void doGameOver() {
+		mTableScene.clearTouchAreas();
+		// check top scores
+		int s = mTable.getScore();
+		String msg = getString(R.string.game_over);
+		if (this.topScores[currentGameType] < s) {
+			this.topScores[currentGameType] = s;
+			msg = getString(R.string.new_record);
+		}
+		
+		// game over with a nice animation
+		Text text = new Text(0, 0, this.mFont2, msg, HorizontalAlign.CENTER);
+        text.setPosition((cameraWidth - text.getWidth()) * 0.5f, (cameraHeight - text.getHeight()) * 0.5f);
+        text.registerEntityModifier(new ScaleModifier(3, 0.1f, 2.0f));
+        text.registerEntityModifier(new RotationModifier(3, 0, 720));
+        mTableScene.attachChild(text);
 	}
 	
-	/////////////// Manage the menu
+	/////////////// Input and sensor events
 	
 	@Override
 	public boolean onMenuItemClicked(final MenuScene pMenuScene, final IMenuItem pMenuItem, final float pMenuItemLocalX, final float pMenuItemLocalY) {
@@ -337,6 +368,11 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		case MENU_GAME_MEDIUM: // medium size game
 			currentGameType = MENU_GAME_MEDIUM;
 			mTable.createTable(12, 7, 3);
+			mSelectGameScene.back();
+			return true;
+		case MENU_GAME_MEDIUM2: // medium size, 4 colors
+			currentGameType = MENU_GAME_MEDIUM2;
+			mTable.createTable(12, 7, 4);
 			mSelectGameScene.back();
 			return true;
 		case MENU_GAME_HARD: // hard game
@@ -381,25 +417,6 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
         }
         return false;
     }
-	
-	/** Shows the game over on the screen and updates the top score list. */
-	private void doGameOver() {
-		mTableScene.clearTouchAreas();
-		// check top scores
-		int s = mTable.getScore();
-		String msg = getString(R.string.game_over);
-		if (this.topScores[currentGameType] < s) {
-			this.topScores[currentGameType] = s;
-			msg = getString(R.string.new_record);
-		}
-		
-		// game over with a nice animation
-		Text text = new Text(0, 0, this.mFont2, msg, HorizontalAlign.CENTER);
-        text.setPosition((cameraWidth - text.getWidth()) * 0.5f, (cameraHeight - text.getHeight()) * 0.5f);
-        text.registerEntityModifier(new ScaleModifier(3, 0.1f, 2.0f));
-        text.registerEntityModifier(new RotationModifier(3, 0, 720));
-        mTableScene.attachChild(text);
-	}
 	
 	//////////////// Inner classes
 
@@ -579,7 +596,15 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 				clearSelection();
 				return;
 			}
-			score += ss;			
+			score += ss;
+			
+			// play the rolling sound
+			if (clickSound != null) {
+				// stop the sound if playing
+				clickSound.stop();
+				// and star again
+				clickSound.play();
+			}
 
 			// remember that balls fall from up to down (increasing rows) and
 			// from right to left (decreasing columns) We run the arrays
