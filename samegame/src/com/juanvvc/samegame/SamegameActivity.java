@@ -1,6 +1,7 @@
 package com.juanvvc.samegame;
 
 import java.io.IOException;
+import java.util.ArrayList;
 
 import javax.microedition.khronos.opengles.GL10;
 
@@ -8,6 +9,7 @@ import org.anddev.andengine.audio.sound.Sound;
 import org.anddev.andengine.audio.sound.SoundFactory;
 import org.anddev.andengine.engine.Engine;
 import org.anddev.andengine.engine.camera.Camera;
+import org.anddev.andengine.engine.handler.IUpdateHandler;
 import org.anddev.andengine.engine.options.EngineOptions;
 import org.anddev.andengine.engine.options.EngineOptions.ScreenOrientation;
 import org.anddev.andengine.engine.options.resolutionpolicy.RatioResolutionPolicy;
@@ -40,7 +42,6 @@ import org.anddev.andengine.util.HorizontalAlign;
 import org.anddev.andengine.util.modifier.IModifier;
 
 import android.content.SharedPreferences;
-import android.content.res.Configuration;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Display;
@@ -246,6 +247,28 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		// Anyway, show the menu as a child scene
 		mTableScene.setChildScene(mMenuScene);
 		
+		// sprites should be removed with care, at the end of a frame 
+		// and not in the middle of the execution. Separate threads do not
+		// help. Then, the Table marks the balls to be removed and they
+		// are really removed using a IUpdateHandler, at the end of a frame.
+		mTableScene.registerUpdateHandler(new IUpdateHandler() {
+            @Override
+            public void onUpdate(float pSecondsElapsed) {
+            	// remove removed balls
+            	for (Ball b: mTable.getRemovedBalls()) {
+            		if (b != null) {
+	            		b.detachSelf();
+	            		mTableScene.unregisterTouchArea(b);
+            		}
+            	}
+            }
+			@Override
+			public void reset() {
+				// after a reset do the same
+				this.onUpdate(0);
+			}
+		});
+		
 		return this.mTableScene;
 	}
 	
@@ -444,6 +467,11 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		private int offsetX;
 		/** Y offset to center the playing field. */
 		private int offsetY;
+		/** List of removed balls.
+		 * Balls must be removed with care, when there is no one messing with them.
+		 * Then, they are marked to be removed, and the real removing is in a IUpdateHandler */
+		private ArrayList<Ball> removedBalls = new ArrayList<Ball>();
+
 
 		/**
 		 * Creates a new table for a game.
@@ -462,6 +490,18 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		/** Create a new table.
 		 * The table is not created immediately, but in the next update */
 		public void createTable(int c, int r, int mt) {
+			// first remove current table
+			if (this.table != null) {
+				for (int i=0; i<this.table.length; i++) {
+					for (int j=0; j<this.table[0].length; j++) {
+						if (table[i][j] != null) {
+							table[i][j].setVisible(false);
+							this.removedBalls.add(table[i][j]);
+						}
+					}
+				}
+			}
+			
 			totalRows = r;
 			totalCols = c;
 			maxtypes = mt;
@@ -623,9 +663,7 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 							b.setVisible(false);
 							b.stopAnimation();
 							b.clearUpdateHandlers();
-							mScene.unregisterTouchArea(b);
-							// you cannot run the next line within the UI thread!!!!
-							b.detachSelf();
+							removedBalls.add(b);
 							// remove from the table
 							table[i][j] = null;
 						}
@@ -748,6 +786,15 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 		
 		public int getYRow(final int r) {
 			return offsetY + r * BALL_SIZE;
+		}
+		
+		/** Returns the balls that were removed.
+		 * The list of removed balls is emptied in this method!
+		 */
+		public ArrayList<Ball> getRemovedBalls() {
+			ArrayList<Ball> b = new ArrayList<Ball>(this.removedBalls);
+			this.removedBalls.clear();
+			return b;
 		}
 	}
 
@@ -874,45 +921,37 @@ public class SamegameActivity extends BaseGameActivity implements IOnMenuItemCli
 				final float pTouchAreaLocalX, final float pTouchAreaLocalY) {
 			// we only manage "down" events
 			if (pSceneTouchEvent.isActionDown()) {
-				// the onEvent() is managed in a different thread.
-				// If you run this in the UI thread, a run condition occurs
-				// sometimes: Balls that have not been run yet and then
-				// are not in position but isMoving()
-				runOnUpdateThread(new Runnable() {
-					public void run() {
-						// if there are balls in movement, ignore the event
-						myLog.d(TAG, "Pressing " + col + ", " + row + " selected=" + isSelected() + " moving=" + isMoving());
-						if (!mTable.stillTable()) {
-							myLog.d(TAG, "Table is not still");
-							return;
-						} else {
-							myLog.d(TAG, "Table is still");
-						}
-		
-						if (isSelected()) {
-							// if the ball was selected in a previous movement, remove
-							// selected balls. This call is safe since we are not in the
-							// UI thread
-							mTable.removeSelectedBalls();
-						} else {
-							// the ball was not selected:
-							// remove all selections
-							mTable.clearSelection();
-							// and select the adjacent balls
-							int s = mTable.selectBall(col, row, -1);
-							// rules of the game: you cannot select only one ball
-							if (s < 2) {
-								// if less than 2 selections, we are the only selected ball
-								mTable.clearSelection();
-								mTable.setCurrentlySelected(0);
-							} else {
-								mTable.setCurrentlySelected(s);
-							}
-							// Update the score of the selection
-							mSelectionText.setText(getString(R.string.selection) + mTable.getSelectionScore());
-						}
+				// if there are balls in movement, ignore the event
+				myLog.d(TAG, "Pressing " + col + ", " + row + " selected=" + isSelected() + " moving=" + isMoving());
+				if (!mTable.stillTable()) {
+					myLog.d(TAG, "Table is not still");
+					return true;
+				} else {
+					myLog.d(TAG, "Table is still");
+				}
+
+				if (isSelected()) {
+					// if the ball was selected in a previous movement, remove
+					// selected balls. This call is safe since we are not in the
+					// UI thread
+					mTable.removeSelectedBalls();
+				} else {
+					// the ball was not selected:
+					// remove all selections
+					mTable.clearSelection();
+					// and select the adjacent balls
+					int s = mTable.selectBall(col, row, -1);
+					// rules of the game: you cannot select only one ball
+					if (s < 2) {
+						// if less than 2 selections, we are the only selected ball
+						mTable.clearSelection();
+						mTable.setCurrentlySelected(0);
+					} else {
+						mTable.setCurrentlySelected(s);
 					}
-				});
+					// Update the score of the selection
+					mSelectionText.setText(getString(R.string.selection) + mTable.getSelectionScore());
+				}
 				return true;
 			}
 			return false; // remember: we only manager down events
